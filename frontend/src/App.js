@@ -1,5 +1,10 @@
 import React, { useState, useEffect, useRef } from "react";
-import { createLocalTimeFromEpoch, WS_URL } from "./helpers";
+import {
+  createLocalTimeFromEpoch,
+  USERNAME,
+  PASSWORD,
+  WS_URL,
+} from "./helpers";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { ToastContainer, toast } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
@@ -31,12 +36,14 @@ function RelatimeBox({ slot, isVaccent, at }) {
           </>
         )}
       </h1>
-      <h3 className="text-md mt-1">{at !== "N/A" && createLocalTimeFromEpoch(at)}</h3>
+      <h3 className="text-md mt-1">
+        {at !== "N/A" && createLocalTimeFromEpoch(at)}
+      </h3>
     </div>
   );
 }
 
-function HistoryComponent({ inTime, outTime, charge, slot }) {
+function HistoryComponent({ inTime, outTime, charge, slot, itemDelete }) {
   return (
     <tr className="border-b">
       <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-gray-900">
@@ -54,15 +61,7 @@ function HistoryComponent({ inTime, outTime, charge, slot }) {
       <td className="whitespace-nowrap  px-6 py-4 flex justify-center">
         <button
           onClick={() => {
-            toast.error("🦄 Wow so easy!", {
-              position: "top-right",
-              autoClose: 5000,
-              hideProgressBar: false,
-              closeOnClick: true,
-              pauseOnHover: true,
-              draggable: true,
-              progress: undefined,
-            });
+            if (window.confirm("Confirm?")) itemDelete();
           }}
           style={{ outline: "none !important" }}
           className="focus:outline-none  bg-red-500 hover:bg-red-700 text-white text-sm font-bold py-2 px-5 rounded-full shadow-md"
@@ -75,8 +74,9 @@ function HistoryComponent({ inTime, outTime, charge, slot }) {
 }
 
 function App() {
+  const [isLoggedin, setIsLoggedin] = useState(false);
   const ws = useRef(null);
-
+  const [history, setHistory] = useState([]);
   const [state, setState] = useState({
     slot_1: {
       vacant: true,
@@ -107,13 +107,35 @@ function App() {
 
     ws.current.onmessage = (e) => {
       const message = JSON.parse(e.data);
-      console.log("e", message);
+
+      if ("info" in message) {
+        setState({ ...message.info });
+      } else if ("msg" in message) {
+        toast.success(message.msg, {
+          position: "top-right",
+          autoClose: 5000,
+          hideProgressBar: false,
+          closeOnClick: true,
+          pauseOnHover: true,
+          draggable: true,
+          progress: undefined,
+        });
+      } else if ("history" in message) {
+        setHistory(message.history);
+      }
     };
 
     return () => ws.current.close();
   }, []);
 
-  return (
+  const delItem = (id) => {
+    console.log("deleteing", id);
+    ws.current.send(JSON.stringify({ delete: id }));
+  };
+
+  if (!isLoggedin) return <Login setLoginSuccess={() => setIsLoggedin(true)} />;
+
+  else return (
     <>
       <div>
         <nav className="flex items-center justify-center flex-wrap bg-indigo-500 py-5 shadow-md">
@@ -138,8 +160,8 @@ function App() {
         theme="colored"
       />
 
-      <div className="flex justify-between mt-6">
-        <div className="w-1/2 border items-center rounded-lg bg-white border-gray-700 h-full mx-4 pb-10 shadow-lg">
+      <div className="lg:flex justify-between mt-6">
+        <div className="lg:w-1/2 w-full border items-center rounded-lg bg-white border-gray-700 h-full mx-4 pb-10 shadow-lg">
           <h1 className="text-center text-3xl font-bold mt-8 text-gray-800">
             <FontAwesomeIcon className="mr-3" icon={faCar} />
             Realtime Status
@@ -168,7 +190,7 @@ function App() {
           </div>
         </div>
 
-        <div className="w-1/2 border items-center rounded-lg bg-white border-gray-700 h-full mx-4 pb-8 mb-8 shadow-lg">
+        <div className="lg:w-1/2 w-full border items-center rounded-lg bg-white border-gray-700 h-full mx-4 pb-8 mb-8 shadow-lg">
           <h1 className="text-center text-3xl font-bold mt-8  text-gray-800">
             <FontAwesomeIcon className="mr-3" icon={faClockRotateLeft} />
             Parking History
@@ -196,31 +218,85 @@ function App() {
                 </tr>
               </thead>
               <tbody className="text-gray-900">
-                <HistoryComponent
-                  slot={1}
-                  inTime={Date.now()}
-                  outTime={Date.now()}
-                  charge={500}
-                />
-                <HistoryComponent
-                  slot={1}
-                  inTime={Date.now()}
-                  outTime={Date.now()}
-                  charge={500}
-                />
-
-                <HistoryComponent
-                  slot={1}
-                  inTime={Date.now()}
-                  outTime={Date.now()}
-                  charge={500}
-                />
+                {history.map((value) => (
+                  <HistoryComponent
+                    key={`${value[1]}-${value[2]}`}
+                    slot={value[4]}
+                    inTime={value[1]}
+                    outTime={value[2]}
+                    charge={value[3]}
+                    itemDelete={() => delItem(value[0])}
+                  />
+                ))}
               </tbody>
             </table>
           </div>
         </div>
       </div>
     </>
+  );
+}
+
+function Login({ setLoginSuccess }) {
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+
+  const LoginUser = () => {
+    if (username !== USERNAME) return alert("Invalid username!");
+    if (password !== PASSWORD) return alert("Wrong password!");
+    setLoginSuccess();
+  };
+
+  return (
+    <div className="w-full flex justify-center">
+      <div className="bg-white shadow-xl border border-gray-400 rounded-lg px-8 pt-6 mt-16 pb-8 mb-4 flex flex-col">
+        <div className="text-xl text-gray-800 font-bold text-center my-5">
+          Admin Login
+        </div>
+        <div className="mb-4">
+          <label
+            className="block text-grey-darker text-sm font-bold mb-2"
+            htmlFor="username"
+          >
+            Username
+          </label>
+          <input
+            className="shadow appearance-none border rounded w-full py-2 px-3 text-grey-darker"
+            id="username"
+            name="username"
+            type="text"
+            placeholder="Username"
+            value={username}
+            onChange={(e) => setUsername(e.target.value)}
+          />
+        </div>
+        <div className="mb-6">
+          <label
+            className="block text-grey-darker text-sm font-bold mb-2"
+            htmlFor="password"
+          >
+            Password
+          </label>
+          <input
+            className="shadow appearance-none border border-red rounded w-full py-2 px-3 text-grey-darker mb-3"
+            id="password"
+            type="password"
+            placeholder="*******"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+          />
+        </div>
+        <div className="flex w-full content-center justify-between">
+          <button
+            className="flex self-center bg-blue-500 hover:bg-blue-800 text-white font-bold py-2 px-4 rounded-lg shadow-md"
+            type="button"
+            onClick={LoginUser}
+          >
+            Sign In
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }
 
