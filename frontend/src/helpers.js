@@ -1,4 +1,4 @@
-export const WS_URL = "ws://10.0.0.122:8888/ws"
+export const WS_URL = "ws://192.168.4.1:8888/ws"
 
 export const getUserTimeZone = () => {
   return Intl.DateTimeFormat().resolvedOptions().timeZone;

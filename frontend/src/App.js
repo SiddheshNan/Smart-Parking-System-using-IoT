@@ -141,7 +141,7 @@ function App() {
         <nav className="flex items-center justify-center flex-wrap bg-indigo-500 py-5 shadow-md">
           <div className="flex items-center flex-shrink-0 text-white mr-6">
             <span className="font-semibold text-3xl tracking-tight">
-              ⚡ Smart Parking System using IoT
+            🚀 Smart Parking System using IoT
             </span>
           </div>
         </nav>
