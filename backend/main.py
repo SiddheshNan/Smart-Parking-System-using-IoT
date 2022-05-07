@@ -6,7 +6,7 @@ import logging
 from threading import Thread
 import RPi.GPIO as GPIO
 import time
-
+import RPi_I2C_driver
 
 # DISPLAY_SCL = 3
 # DISPLAY_SDA = 2
@@ -18,7 +18,6 @@ SENSOR_4 = 17
 SENSOR_GATE = 21
 
 servo_pin = 13
-
 
 config = {
     "WEB_SERVER": {
@@ -44,13 +43,14 @@ GPIO.setup(SENSOR_2, GPIO.IN, pull_up_down=GPIO.PUD_UP)
 GPIO.setup(SENSOR_3, GPIO.IN, pull_up_down=GPIO.PUD_UP)
 GPIO.setup(SENSOR_4, GPIO.IN, pull_up_down=GPIO.PUD_UP)
 GPIO.setup(SENSOR_GATE, GPIO.IN, pull_up_down=GPIO.PUD_UP)
-GPIO.setup(servo_pin,GPIO.OUT)
+GPIO.setup(servo_pin, GPIO.OUT)
 
-pwm = GPIO.PWM(servo_pin,50) # 50 Hz (20 ms PWM period)
+mylcd = RPi_I2C_driver.lcd()
+
+pwm = GPIO.PWM(servo_pin, 50)  # 50 Hz (20 ms PWM period)
 pwm.start(2.0)
 time.sleep(0.5)
 pwm.ChangeDutyCycle(0)
-
 
 logging.info('Program Started!')
 
@@ -144,7 +144,6 @@ def sendMsg(vehicle_num, action, charge):
     WebSocketHandler.send_message(json.dumps({'msg': msg}))
 
 
-
 def calculateCharge(in_time, out_time):
     return int(out_time) - int(in_time)
 
@@ -175,7 +174,7 @@ def detectVehicleChange(slot_num, value):
     time.sleep(0.1)
 
 
-def gate_open_close(): # 7.0 is 90 | 2.0 is 0
+def gate_open_close():  # 7.0 is 90 | 2.0 is 0
     # start PWM by rotating to 90 degrees
     pwm.ChangeDutyCycle(7.0)  # rotate to 90 degrees
     time.sleep(0.5)
@@ -187,6 +186,19 @@ def gate_open_close(): # 7.0 is 90 | 2.0 is 0
     time.sleep(0.5)
     pwm.ChangeDutyCycle(0.0)
 
+
+def getStatusString(val):
+    if val:
+        return "Empty"
+    else:
+        return "Full "
+
+
+def print_lcd():
+    row1 = f"1:{getStatusString(app_state['slot_1']['vacant'])} 2:{getStatusString(app_state['slot_2']['vacant'])}"
+    row2 = f"3:{getStatusString(app_state['slot_3']['vacant'])} 4:{getStatusString(app_state['slot_4']['vacant'])}"
+    mylcd.lcd_display_string(row1, 1)
+    mylcd.lcd_display_string(row2, 2)
 
 
 class GpioThread(Thread):
@@ -202,9 +214,10 @@ class GpioThread(Thread):
             detectVehicleChange(3, GPIO.input(SENSOR_3) == GPIO.HIGH)
             detectVehicleChange(4, GPIO.input(SENSOR_4) == GPIO.HIGH)
 
-            if GPIO.input(SENSOR_GATE) == GPIO.LOW and check is True: # new vehcile arrived
+            if GPIO.input(SENSOR_GATE) == GPIO.LOW and check is True:  # new vehcile arrived
                 check = False
-                if app_state[f'slot_1']['vacant'] or app_state[f'slot_2']['vacant'] or app_state[f'slot_3']['vacant'] or app_state[f'slot_3']['vacant']:
+                if app_state[f'slot_1']['vacant'] or app_state[f'slot_2']['vacant'] or app_state[f'slot_3']['vacant'] or \
+                        app_state[f'slot_3']['vacant']:
                     WebSocketHandler.send_message(json.dumps({'msg': "New vehicle arrived, Opening Gate.."}))
                     Thread(target=gate_open_close, args=(), daemon=True).start()
                 else:
@@ -212,9 +225,6 @@ class GpioThread(Thread):
 
             elif GPIO.input(SENSOR_GATE) == GPIO.HIGH and check is False:
                 check = True
-
-
-
 
 
 def main():
@@ -235,9 +245,13 @@ def main():
     periodic_callback2 = ioloop.PeriodicCallback(
         lambda: WebSocketHandler.send_message(json.dumps({'history': getHistory()})), 2000
     )
+    periodic_callback3 = ioloop.PeriodicCallback(
+        lambda: print_lcd(), 1000
+    )
     GpioThread().start()
     periodic_callback1.start()
     periodic_callback2.start()
+    periodic_callback3.start()
     io_loop.start()
 
 
